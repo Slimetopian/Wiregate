@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '../..');
 const dataDir = path.resolve(__dirname, '../data');
@@ -22,10 +22,15 @@ function isDemoMode() {
 
 function writeStatus({ status, running, message, pid = null }) {
   ensureDataDir();
+  const current = readStatusFile();
   fs.writeFileSync(
     statusFile,
     JSON.stringify(
       {
+        branch: current.branch ?? null,
+        currentCommit: current.currentCommit ?? null,
+        remoteCommit: current.remoteCommit ?? null,
+        updateAvailable: current.updateAvailable ?? null,
         status,
         running,
         message,
@@ -51,6 +56,10 @@ function readStatusFile() {
       status: 'idle',
       running: false,
       message: 'No update has been started yet.',
+      branch: null,
+      currentCommit: null,
+      remoteCommit: null,
+      updateAvailable: null,
       pid: null,
       updatedAt: null,
     };
@@ -63,8 +72,37 @@ function readStatusFile() {
       status: 'unknown',
       running: false,
       message: 'Unable to parse update status file.',
+      branch: null,
+      currentCommit: null,
+      remoteCommit: null,
+      updateAvailable: null,
       pid: null,
       updatedAt: null,
+    };
+  }
+}
+
+function getLocalGitSummary() {
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const currentCommit = execSync('git rev-parse HEAD', {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+
+    return {
+      branch,
+      currentCommit,
+    };
+  } catch {
+    return {
+      branch: null,
+      currentCommit: null,
     };
   }
 }
@@ -108,6 +146,7 @@ function getStatus() {
   const running = fileStatus.running && (pid ? isProcessRunning(pid) || isDemoMode() : false);
 
   return {
+    ...getLocalGitSummary(),
     ...fileStatus,
     pid,
     running,
@@ -125,6 +164,7 @@ function startDemoUpdate() {
   writeStatus({ status: 'running', running: true, message: 'Starting demo update.', pid: process.pid });
 
   const lines = [
+    'Checking whether a newer GitHub version exists...',
     'Fetching latest code from origin/main...',
     'Installing backend dependencies...',
     'Installing frontend dependencies...',

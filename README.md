@@ -174,10 +174,12 @@ This is intended for local network administration only.
 
 ## Updating WireGate
 From the Settings page, use the `Update from GitHub` button to:
-- pull the newest repository version
+- check whether a newer GitHub version exists before doing anything
+- pull the newest repository version only when an update is available
 - reinstall backend and frontend dependencies
 - rebuild the frontend
 - restart the `wiregate` service
+- preserve the existing `.env` file and the saved user data in `backend/data/`
 
 You can also run the updater manually on Ubuntu:
 

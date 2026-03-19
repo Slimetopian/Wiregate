@@ -294,7 +294,11 @@ export default function Settings({ onStatusChange }) {
 
           <div className="button-row">
             <button className="btn btn-primary" type="button" onClick={handleStartUpdate} disabled={updateBusy || updateState?.running}>
-              {updateBusy || updateState?.running ? 'Update running…' : 'Update from GitHub'}
+              {updateBusy || updateState?.running
+                ? 'Update running…'
+                : updateState?.status === 'up-to-date'
+                  ? 'Check for updates again'
+                  : 'Update from GitHub'}
             </button>
           </div>
 
@@ -302,6 +306,16 @@ export default function Settings({ onStatusChange }) {
             <div className="detail-item">
               <span className="meta-label">Last update state</span>
               <strong>{updateState?.status || '--'}</strong>
+            </div>
+            <div className="detail-item">
+              <span className="meta-label">Update available</span>
+              <strong>
+                {typeof updateState?.updateAvailable === 'boolean'
+                  ? updateState.updateAvailable
+                    ? 'Yes'
+                    : 'No'
+                  : 'Unknown'}
+              </strong>
             </div>
             <div className="detail-item detail-span">
               <span className="meta-label">Latest message</span>
