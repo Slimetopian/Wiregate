@@ -68,6 +68,31 @@ ensure_node() {
   apt install -y nodejs
 }
 
+sync_existing_repo() {
+  local repo_dir="$1"
+  local branch remote_ref current_commit remote_commit
+
+  branch="$(git -C "${repo_dir}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+  if [[ -z "${branch}" || "${branch}" == "HEAD" ]]; then
+    branch="main"
+  fi
+
+  echo "Fetching latest code from origin/${branch}..."
+  git -C "${repo_dir}" fetch --all --prune
+
+  remote_ref="origin/${branch}"
+  if ! git -C "${repo_dir}" rev-parse --verify "${remote_ref}" >/dev/null 2>&1; then
+    remote_ref="origin/main"
+  fi
+
+  current_commit="$(git -C "${repo_dir}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  remote_commit="$(git -C "${repo_dir}" rev-parse --short "${remote_ref}" 2>/dev/null || echo unknown)"
+
+  echo "Syncing tracked files from ${current_commit} to ${remote_commit} (${remote_ref})..."
+  git -C "${repo_dir}" reset --hard "${remote_ref}"
+  git -C "${repo_dir}" clean -fd
+}
+
 sync_repo() {
   if [[ "${SKIP_REPO_SYNC:-false}" == "true" ]]; then
     echo "Skipping repository sync because SKIP_REPO_SYNC=true."
@@ -75,8 +100,8 @@ sync_repo() {
   fi
 
   if [[ -d "${WIREGATE_DIR}/.git" ]]; then
-    echo "Git repository detected. Pulling latest changes..."
-    git -C "${WIREGATE_DIR}" pull --ff-only || true
+    echo "Git repository detected. Force-syncing latest tracked changes..."
+    sync_existing_repo "${WIREGATE_DIR}"
     return
   fi
 
@@ -84,7 +109,7 @@ sync_repo() {
     TARGET_DIR="/opt/wiregate"
     if [[ -d "${TARGET_DIR}/.git" ]]; then
       echo "Updating ${TARGET_DIR}..."
-      git -C "${TARGET_DIR}" pull --ff-only
+      sync_existing_repo "${TARGET_DIR}"
     else
       echo "Cloning ${REPO_URL} into ${TARGET_DIR}..."
       git clone "${REPO_URL}" "${TARGET_DIR}"

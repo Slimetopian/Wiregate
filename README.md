@@ -186,7 +186,7 @@ This is intended for local network administration only.
 
 ## Updating WireGate
 From the Settings page, use the update button to rerun `sudo ./install.sh`. That installer flow will:
-- pull the newest repository version when the repo is a git checkout
+- fetch GitHub and hard-sync tracked repository files when the repo is a git checkout
 - rerun the full Ubuntu installer on the current code
 - reinstall backend and frontend dependencies
 - rebuild the frontend
