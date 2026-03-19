@@ -12,6 +12,9 @@ No cloud services. No subscriptions. Fully open source.
 - Download or scan a QR code for the VPN config file
 - Live dashboard showing connected users and server stats
 - Start, stop and restart WireGuard from the browser
+- Live terminal output for WireGuard start, stop, and restart actions
+- Browser toggle for switching between test mode and production mode
+- One-click updater that pulls the newest GitHub version and rebuilds the app
 - Demo mode for testing without a real WireGuard server
 - One-command install script for Ubuntu
 
@@ -156,10 +159,32 @@ If the installer selected a different port because `3001` was in use, check the 
 | `WG_SUBNET` | First three octets of the WireGuard subnet, for example `10.0.0` |
 | `WG_DNS` | DNS server pushed to clients |
 | `DEMO_MODE` | When `true`, skips real WireGuard commands and returns safe demo data |
+| `ENABLE_COMMAND_CENTER` | When `true`, enables safe preset admin commands from the Settings page |
 
 ## Demo mode
 Set `DEMO_MODE=true` to run WireGate on any OS without WireGuard installed.
 This uses fake status, peer and system data so the UI can be tested safely.
+
+From the Settings page, you can switch between test mode and production mode from the UI. Production mode still requires real values for `WG_INTERFACE`, `WG_SERVER_ENDPOINT`, `WG_SERVER_PORT`, `WG_SERVER_PUBLIC_KEY`, and `WG_SUBNET`.
+
+## Command center
+`ENABLE_COMMAND_CENTER` is enabled by default in `.env.example`. The Settings page exposes safe preset terminal actions such as service status, service logs, and WireGuard service restarts.
+
+This is intended for local network administration only.
+
+## Updating WireGate
+From the Settings page, use the `Update from GitHub` button to:
+- pull the newest repository version
+- reinstall backend and frontend dependencies
+- rebuild the frontend
+- restart the `wiregate` service
+
+You can also run the updater manually on Ubuntu:
+
+```bash
+cd wiregate
+sudo bash ./update.sh
+```
 
 ## Security note
 WireGate should only be reachable on your local network or behind a VPN.

@@ -67,13 +67,22 @@ export default function Dashboard({ onStatusChange }) {
 
   const handleControl = async (action) => {
     setBusyAction(action);
+    setTerminalOutput(`$ wg-quick ${action.toLowerCase() === 'restart' ? 'down/up' : action.toLowerCase()} ${wgStatus?.interface || 'wg0'}\n`);
     try {
-      const result = await api[`wg${action}`]();
-      setTerminalOutput(result.output || `${action} completed.`);
+      await new Promise((resolve, reject) => {
+        api.streamWireguardAction(action, {
+          onChunk: (chunk) => {
+            setTerminalOutput((current) => `${current}${chunk}`);
+          },
+          onEnd: resolve,
+          onError: reject,
+        });
+      });
+
       showToast(`WireGuard ${action.toLowerCase()} complete`, 'success');
       await load({ silent: true });
     } catch (error) {
-      setTerminalOutput(error.message);
+      setTerminalOutput((current) => `${current}\n[error] ${error.message}`);
       showToast(error.message, 'error');
     } finally {
       setBusyAction('');

@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 
 function isDemoMode() {
   return `${process.env.DEMO_MODE ?? 'true'}`.toLowerCase() !== 'false';
@@ -50,6 +50,88 @@ function runCommand(command) {
     const stderr = error.stderr?.toString()?.trim();
     throw new Error(stderr || stdout || error.message || 'WireGuard command failed');
   }
+}
+
+function emitDemoLines(lines, handlers = {}) {
+  const { onData = () => {}, onEnd = () => {}, onError = () => {} } = handlers;
+  let index = 0;
+
+  const timer = setInterval(() => {
+    if (index >= lines.length) {
+      clearInterval(timer);
+      onEnd();
+      return;
+    }
+
+    try {
+      onData(`${lines[index]}\n`);
+      index += 1;
+    } catch (error) {
+      clearInterval(timer);
+      onError(error);
+    }
+  }, 250);
+
+  return () => clearInterval(timer);
+}
+
+function spawnCommand(command, args, handlers = {}) {
+  const { onData = () => {}, onEnd = () => {}, onError = () => {} } = handlers;
+  const child = spawn(command, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  child.stdout.on('data', (chunk) => onData(chunk.toString()));
+  child.stderr.on('data', (chunk) => onData(chunk.toString()));
+  child.on('error', (error) => onError(error));
+  child.on('close', (code) => {
+    if (code === 0) {
+      onEnd();
+      return;
+    }
+
+    onError(new Error(`Command exited with code ${code}`));
+  });
+
+  return child;
+}
+
+function streamSequence(steps, handlers = {}) {
+  const { onData = () => {}, onEnd = () => {}, onError = () => {} } = handlers;
+  let currentStop = null;
+  let index = 0;
+  let stopped = false;
+
+  const runNext = () => {
+    if (stopped) {
+      return;
+    }
+
+    if (index >= steps.length) {
+      onEnd();
+      return;
+    }
+
+    const step = steps[index];
+    index += 1;
+
+    currentStop = step({
+      onData,
+      onEnd: runNext,
+      onError,
+    });
+  };
+
+  runNext();
+
+  return () => {
+    stopped = true;
+    if (typeof currentStop === 'function') {
+      currentStop();
+    } else if (currentStop?.kill) {
+      currentStop.kill('SIGTERM');
+    }
+  };
 }
 
 function getStatus() {
@@ -183,6 +265,56 @@ function restartInterface() {
   return { ok: true, output: [stopped.output, started.output].filter(Boolean).join('\n') };
 }
 
+function streamInterfaceAction(action, handlers = {}) {
+  const iface = getInterfaceName();
+
+  if (isDemoMode()) {
+    const demoMap = {
+      start: [
+        `[#] ip link add ${iface} type wireguard`,
+        `[#] wg setconf ${iface} /dev/fd/63`,
+        `[#] ip address add ${(process.env.WG_SUBNET || '10.0.0')}.1/24 dev ${iface}`,
+        `[#] ip link set mtu 1420 up dev ${iface}`,
+      ],
+      stop: [`[#] ip link delete dev ${iface}`, `Interface ${iface} stopped`],
+      restart: [
+        `[#] ip link delete dev ${iface}`,
+        `Interface ${iface} stopped`,
+        `[#] ip link add ${iface} type wireguard`,
+        `[#] wg setconf ${iface} /dev/fd/63`,
+        `[#] ip link set mtu 1420 up dev ${iface}`,
+      ],
+    };
+
+    const lines = demoMap[action];
+    if (!lines) {
+      throw new Error('Unknown interface action');
+    }
+
+    return emitDemoLines(lines, handlers);
+  }
+
+  if (action === 'restart') {
+    return streamSequence(
+      [
+        (stepHandlers) => spawnCommand('sudo', ['wg-quick', 'down', iface], stepHandlers),
+        (stepHandlers) => spawnCommand('sudo', ['wg-quick', 'up', iface], stepHandlers),
+      ],
+      handlers
+    );
+  }
+
+  if (action === 'start') {
+    return spawnCommand('sudo', ['wg-quick', 'up', iface], handlers);
+  }
+
+  if (action === 'stop') {
+    return spawnCommand('sudo', ['wg-quick', 'down', iface], handlers);
+  }
+
+  throw new Error('Unknown interface action');
+}
+
 module.exports = {
   getStatus,
   getPeers,
@@ -191,4 +323,5 @@ module.exports = {
   startInterface,
   stopInterface,
   restartInterface,
+  streamInterfaceAction,
 };

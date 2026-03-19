@@ -641,6 +641,69 @@ img {
   gap: 18px;
 }
 
+.mode-card-grid,
+.command-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.update-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.mode-card-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.command-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.command-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.command-card:hover:not(:disabled) {
+  border-color: rgba(34, 211, 238, 0.24);
+  background: rgba(34, 211, 238, 0.06);
+}
+
+.command-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.command-title {
+  font-weight: 500;
+}
+
+.command-copy,
+.command-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.command-meta {
+  color: var(--cyan);
+}
+
+.update-terminal {
+  max-height: 320px;
+}
+
 .copy-field {
   display: flex;
   flex-direction: column;
@@ -724,7 +787,9 @@ img {
   .stat-grid,
   .status-grid,
   .details-grid,
-  .config-modal-grid {
+  .config-modal-grid,
+  .mode-card-grid,
+  .update-meta-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -756,7 +821,9 @@ img {
   .stat-grid,
   .status-grid,
   .details-grid,
-  .config-modal-grid {
+  .config-modal-grid,
+  .mode-card-grid,
+  .update-meta-grid {
     grid-template-columns: 1fr;
   }
 

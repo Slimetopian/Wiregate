@@ -48,6 +48,62 @@ export const api = {
       method: 'POST',
     }),
   system: () => request('/api/system'),
+  systemMode: () => request('/api/system/mode'),
+  setSystemMode: (demo) =>
+    request('/api/system/mode', {
+      method: 'POST',
+      body: JSON.stringify({ demo }),
+    }),
+  updateStatus: () => request('/api/system/update'),
+  startUpdate: () =>
+    request('/api/system/update', {
+      method: 'POST',
+    }),
+  systemCommands: () => request('/api/system/commands'),
+  runSystemCommand: (commandId) =>
+    request(`/api/system/commands/${encodeURIComponent(commandId)}`, {
+      method: 'POST',
+    }),
+  streamWireguardAction(action, handlers = {}) {
+    const source = new EventSource(`/api/wireguard/stream/${encodeURIComponent(action.toLowerCase())}`);
+    let ended = false;
+
+    source.addEventListener('chunk', (event) => {
+      const data = JSON.parse(event.data);
+      handlers.onChunk?.(data.chunk);
+    });
+
+    source.addEventListener('end', (event) => {
+      ended = true;
+      const data = JSON.parse(event.data);
+      handlers.onEnd?.(data);
+      source.close();
+    });
+
+    source.addEventListener('error', (event) => {
+      ended = true;
+      try {
+        const data = JSON.parse(event.data);
+        handlers.onError?.(new Error(data.error || 'Streaming request failed'));
+      } catch {
+        handlers.onError?.(new Error('Streaming request failed'));
+      }
+      source.close();
+    });
+
+    source.onerror = () => {
+      if (ended) {
+        return;
+      }
+      handlers.onError?.(new Error('Streaming connection closed unexpectedly'));
+      source.close();
+    };
+
+    return () => {
+      ended = true;
+      source.close();
+    };
+  },
   async getQR(configString) {
     const response = await request('/api/users/qr', {
       method: 'POST',
