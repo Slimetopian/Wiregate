@@ -51,11 +51,29 @@ function updateConfigValue(content, key, value) {
   return `${content.trimEnd()}\n${key} = ${value}\n`;
 }
 
+function buildPostUp(iface, subnet, outboundIface, port) {
+  return [
+    `iptables -A INPUT -p udp --dport ${port} -j ACCEPT`,
+    `iptables -A FORWARD -i ${iface} -j ACCEPT`,
+    `iptables -A FORWARD -o ${iface} -j ACCEPT`,
+    `iptables -t nat -A POSTROUTING -s ${subnet}.0/24 -o ${outboundIface} -j MASQUERADE`,
+  ].join('; ');
+}
+
+function buildPostDown(iface, subnet, outboundIface, port) {
+  return [
+    `iptables -D INPUT -p udp --dport ${port} -j ACCEPT`,
+    `iptables -D FORWARD -i ${iface} -j ACCEPT`,
+    `iptables -D FORWARD -o ${iface} -j ACCEPT`,
+    `iptables -t nat -D POSTROUTING -s ${subnet}.0/24 -o ${outboundIface} -j MASQUERADE`,
+  ].join('; ');
+}
+
 function escapeRegExp(value) {
   return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function updateSubnetReferences(content, previousSubnet, nextSubnet, iface, outboundIface) {
+function updateSubnetReferences(content, previousSubnet, nextSubnet, iface, outboundIface, port) {
   let nextContent = content;
 
   if (previousSubnet && previousSubnet !== nextSubnet) {
@@ -68,8 +86,8 @@ function updateSubnetReferences(content, previousSubnet, nextSubnet, iface, outb
 
   nextContent = updateConfigValue(nextContent, 'Address', `${nextSubnet}.1/24`);
 
-  const postUp = `iptables -A FORWARD -i ${iface} -j ACCEPT; iptables -A FORWARD -o ${iface} -j ACCEPT; iptables -t nat -A POSTROUTING -s ${nextSubnet}.0/24 -o ${outboundIface} -j MASQUERADE`;
-  const postDown = `iptables -D FORWARD -i ${iface} -j ACCEPT; iptables -D FORWARD -o ${iface} -j ACCEPT; iptables -t nat -D POSTROUTING -s ${nextSubnet}.0/24 -o ${outboundIface} -j MASQUERADE`;
+  const postUp = buildPostUp(iface, nextSubnet, outboundIface, port);
+  const postDown = buildPostDown(iface, nextSubnet, outboundIface, port);
   nextContent = updateConfigValue(nextContent, 'PostUp', postUp);
   nextContent = updateConfigValue(nextContent, 'PostDown', postDown);
 
@@ -115,6 +133,25 @@ function ensureWireguardInstalled() {
   } catch {
     run('apt update');
     run('apt install -y wireguard');
+  }
+}
+
+function openFirewallPort(port) {
+  const normalizedPort = Number(port);
+  if (!Number.isFinite(normalizedPort) || normalizedPort < 1 || normalizedPort > 65535) {
+    return;
+  }
+
+  try {
+    run(`iptables -C INPUT -p udp --dport ${normalizedPort} -j ACCEPT`);
+  } catch {
+    run(`iptables -I INPUT -p udp --dport ${normalizedPort} -j ACCEPT`);
+  }
+
+  try {
+    run('command -v ufw >/dev/null 2>&1 && ufw --force allow ' + normalizedPort + '/udp');
+  } catch {
+    // Ignore ufw failures; raw iptables rule above is the hard requirement.
   }
 }
 
@@ -168,13 +205,14 @@ function ensureWireguardBootstrap() {
         `ListenPort = ${port}`,
         `PrivateKey = ${privateKey}`,
         'SaveConfig = true',
-        `PostUp = iptables -A FORWARD -i ${iface} -j ACCEPT; iptables -A FORWARD -o ${iface} -j ACCEPT; iptables -t nat -A POSTROUTING -s ${subnet}.0/24 -o ${outboundIface} -j MASQUERADE`,
-        `PostDown = iptables -D FORWARD -i ${iface} -j ACCEPT; iptables -D FORWARD -o ${iface} -j ACCEPT; iptables -t nat -D POSTROUTING -s ${subnet}.0/24 -o ${outboundIface} -j MASQUERADE`,
+        `PostUp = ${buildPostUp(iface, subnet, outboundIface, port)}`,
+        `PostDown = ${buildPostDown(iface, subnet, outboundIface, port)}`,
         '',
       ].join('\n'),
       { encoding: 'utf8', mode: 0o600 }
     );
 
+    openFirewallPort(port);
     run(`systemctl enable --now wg-quick@${iface}`);
   }
 
@@ -227,6 +265,7 @@ function applyWireguardServerConfig({ endpoint, port, subnet }) {
 
   if (fs.existsSync(configPath)) {
     let updatedConfig = fs.readFileSync(configPath, 'utf8');
+    const nextPort = `${port || process.env.WG_SERVER_PORT || bootstrap.port}`.trim();
 
     if (port) {
       updatedConfig = updateConfigValue(updatedConfig, 'ListenPort', `${port}`.trim());
@@ -238,7 +277,15 @@ function applyWireguardServerConfig({ endpoint, port, subnet }) {
         throw new Error('Unable to detect the default outbound interface.');
       }
 
-      updatedConfig = updateSubnetReferences(updatedConfig, previousSubnet, `${subnet}`.trim(), iface, outboundIface);
+      updatedConfig = updateSubnetReferences(updatedConfig, previousSubnet, `${subnet}`.trim(), iface, outboundIface, nextPort);
+    } else if (port) {
+      const outboundIface = getDefaultInterface();
+      if (!outboundIface) {
+        throw new Error('Unable to detect the default outbound interface.');
+      }
+
+      updatedConfig = updateConfigValue(updatedConfig, 'PostUp', buildPostUp(iface, previousSubnet, outboundIface, nextPort));
+      updatedConfig = updateConfigValue(updatedConfig, 'PostDown', buildPostDown(iface, previousSubnet, outboundIface, nextPort));
     }
 
     fs.writeFileSync(configPath, updatedConfig, { encoding: 'utf8', mode: 0o600 });
@@ -246,6 +293,10 @@ function applyWireguardServerConfig({ endpoint, port, subnet }) {
 
   if (Object.keys(nextValues).length > 0) {
     envStore.updateEnvValues(nextValues);
+  }
+
+  if (port) {
+    openFirewallPort(`${port}`.trim());
   }
 
   if (subnet) {
