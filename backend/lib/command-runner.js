@@ -52,7 +52,10 @@ function getCommandDefinitions() {
 }
 
 function listCommands() {
-  const commands = Object.values(getCommandDefinitions()).map(({ command, ...rest }) => rest);
+  const commands = Object.values(getCommandDefinitions()).map(({ command, ...rest }) => ({
+    ...rest,
+    shellCommand: command,
+  }));
   return {
     enabled: commandCenterEnabled(),
     commands,

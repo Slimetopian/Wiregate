@@ -1,3 +1,4 @@
+const os = require('os');
 const path = require('path');
 
 let nodePty = null;
@@ -8,7 +9,7 @@ try {
   nodePty = null;
 }
 
-const repoRoot = path.resolve(__dirname, '../..');
+const shellHome = process.env.HOME || os.homedir() || '/root';
 const maxBufferLength = 120000;
 
 let shellProcess = null;
@@ -17,10 +18,11 @@ let outputBuffer = '';
 const subscribers = new Set();
 
 function getShellDefinition() {
+  const command = process.env.SHELL || '/bin/bash';
   return {
-    command: process.env.SHELL || '/bin/bash',
-    args: [],
-    label: 'ubuntu-vm-shell',
+    command,
+    args: ['-l'],
+    label: path.basename(command),
   };
 }
 
@@ -65,7 +67,7 @@ function ensureSession() {
   shellLabel = shell.label;
 
   shellProcess = nodePty.spawn(shell.command, shell.args, {
-    cwd: repoRoot,
+    cwd: shellHome,
     cols: 120,
     rows: 32,
     name: 'xterm-256color',
@@ -74,8 +76,6 @@ function ensureSession() {
       TERM: process.env.TERM || 'xterm-256color',
     },
   });
-
-  appendOutput(`[wiregate terminal connected to ${shell.label} in ${repoRoot}]\r\n`);
 
   shellProcess.onData((chunk) => appendOutput(chunk.toString()));
   shellProcess.onExit(({ exitCode }) => {
@@ -97,7 +97,7 @@ function getState() {
   return {
     running: Boolean(shellProcess),
     shell: shellLabel,
-    cwd: repoRoot,
+    cwd: shellHome,
     output: outputBuffer,
   };
 }
