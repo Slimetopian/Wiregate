@@ -22,8 +22,10 @@ No cloud services. No subscriptions. Fully open source.
 - A WireGuard interface (`wg0`) already set up
 
 ## Quick install (Ubuntu)
+This is the fastest path on a fresh Ubuntu server. The installer checks and installs the required repo dependencies, including Node.js 18+, WireGuard, `git`, and `iproute2` when they are missing.
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/wiregate.git
+git clone https://github.com/Slimetopian/wiregate.git
 cd wiregate
 chmod +x install.sh
 sudo ./install.sh
@@ -31,6 +33,15 @@ sudo ./install.sh
 
 ## Ubuntu installation plan
 WireGate depends on a small set of packages and services on the server. The installer handles these automatically where possible.
+
+### Repo requirements for Ubuntu
+Before WireGate can manage a real VPN server, the host needs:
+- Ubuntu 22.04 or later
+- a WireGuard server config file, usually `/etc/wireguard/wg0.conf`
+- the `wireguard` package installed
+- Node.js 18 or newer
+- `systemd` available for the `wiregate` service and optional `wg-quick@wg0` service
+- network access to install packages and clone the repository
 
 ### Packages the installer checks or installs
 - `wireguard` — required for `wg` and `wg-quick`
@@ -42,6 +53,53 @@ WireGate depends on a small set of packages and services on the server. The inst
 ### Services used by WireGate
 - `wiregate.service` — the browser admin panel backend, installed and enabled by `install.sh`
 - `wg-quick@wg0.service` — optional but recommended if you want the WireGuard interface itself to come up automatically on boot
+
+### Install Node.js manually on Ubuntu
+If you want to install Node.js yourself before running WireGate, use:
+
+```bash
+sudo apt update
+sudo apt install -y curl ca-certificates gnupg
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+sudo apt update
+sudo apt install -y nodejs
+node -v
+npm -v
+```
+
+### Install WireGuard manually on Ubuntu
+If WireGuard is not already present, install it with:
+
+```bash
+sudo apt update
+sudo apt install -y wireguard
+wg --version
+```
+
+### Enable the WireGuard service on boot
+If your server interface is `wg0`, make sure the service is enabled:
+
+```bash
+sudo systemctl enable --now wg-quick@wg0
+sudo systemctl status wg-quick@wg0
+```
+
+If your interface uses a different name, replace `wg0` with that interface name.
+
+### Minimal WireGuard server prep before installing WireGate
+WireGate expects a working WireGuard server interface. A common sequence is:
+
+```bash
+sudo mkdir -p /etc/wireguard
+sudo nano /etc/wireguard/wg0.conf
+sudo chmod 600 /etc/wireguard/wg0.conf
+sudo systemctl enable --now wg-quick@wg0
+sudo wg show
+```
+
+After that, set the matching values in `.env`, especially `WG_INTERFACE`, `WG_SERVER_PORT`, `WG_SERVER_PUBLIC_KEY`, `WG_SERVER_ENDPOINT`, and `DEMO_MODE=false`.
 
 ### Recommended Ubuntu setup order
 1. Install Ubuntu 22.04 or later.
@@ -130,12 +188,24 @@ npm run dev
 ## Running on a real Ubuntu server
 ```bash
 ssh user@your-server-ip
-git clone https://github.com/YOUR_USERNAME/wiregate.git
+git clone https://github.com/Slimetopian/wiregate.git
 cd wiregate
 chmod +x install.sh
 sudo ./install.sh
 sudo nano .env
 sudo systemctl restart wiregate
+sudo systemctl enable --now wg-quick@wg0
+```
+
+If you prefer not to use the installer for prerequisites, install them manually first:
+
+```bash
+sudo apt update
+sudo apt install -y wireguard git iproute2 curl ca-certificates gnupg
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+sudo apt update
+sudo apt install -y nodejs
 sudo systemctl enable --now wg-quick@wg0
 ```
 
