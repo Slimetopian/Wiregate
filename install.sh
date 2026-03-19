@@ -322,10 +322,10 @@ choose_backend_port() {
 
 install_dependencies() {
   echo "Installing backend dependencies..."
-  npm --prefix "${WIREGATE_DIR}/backend" install
+  npm --prefix "${WIREGATE_DIR}/backend" install --include=dev
 
   echo "Installing frontend dependencies..."
-  npm --prefix "${WIREGATE_DIR}/frontend" install
+  npm --prefix "${WIREGATE_DIR}/frontend" install --include=dev
 
   echo "Building frontend..."
   npm --prefix "${WIREGATE_DIR}/frontend" run build
