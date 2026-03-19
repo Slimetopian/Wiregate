@@ -353,7 +353,7 @@ export default function Settings({ onStatusChange }) {
           <div className="section-head">
             <div>
               <h2>Update WireGate</h2>
-              <p className="page-sub">Use the buttons below to either pull a newer GitHub version or force a full reinstall-style repair without losing user data.</p>
+              <p className="page-sub">Use the buttons below to rerun the Ubuntu installer so the latest site build and server setup are applied again.</p>
             </div>
             <span className={`badge ${updateState?.running ? 'badge-online' : 'badge-offline'}`}>
               {updateState?.running ? 'Updating' : updateState?.status || 'Idle'}
@@ -362,14 +362,10 @@ export default function Settings({ onStatusChange }) {
 
           <div className="button-row">
             <button className="btn btn-primary" type="button" onClick={() => handleStartUpdate(false)} disabled={updateBusy || repairBusy || updateState?.running}>
-              {updateBusy || updateState?.running
-                ? 'Update running…'
-                : updateState?.status === 'up-to-date'
-                  ? 'Check for updates again'
-                  : 'Update from GitHub'}
+              {updateBusy || updateState?.running ? 'Installer running…' : 'Run installer update'}
             </button>
             <button className="btn btn-amber" type="button" onClick={() => handleStartUpdate(true)} disabled={updateBusy || repairBusy || updateState?.running}>
-              {repairBusy || updateState?.running ? 'Repair running…' : 'Repair / reinstall now'}
+              {repairBusy || updateState?.running ? 'Repair running…' : 'Run installer repair'}
             </button>
           </div>
 

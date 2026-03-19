@@ -6,10 +6,6 @@ DATA_DIR="${REPO_DIR}/backend/data"
 STATUS_FILE="${DATA_DIR}/update-status.json"
 LOG_FILE="${DATA_DIR}/update.log"
 PID_FILE="${DATA_DIR}/update.pid"
-BACKUP_DIR="${DATA_DIR}/update-backup"
-ENV_FILE="${REPO_DIR}/.env"
-BACKUP_ENV_FILE="${BACKUP_DIR}/.env.backup"
-BACKUP_USERS_DIR="${BACKUP_DIR}/users-data"
 
 mkdir -p "${DATA_DIR}"
 : >"${LOG_FILE}"
@@ -47,109 +43,47 @@ EOF
 }
 
 finish_success() {
-  write_status "completed" false "Update completed successfully."
-  rm -rf "${BACKUP_DIR}"
-  rm -f "${PID_FILE}"
-}
-
-finish_uptodate() {
-  write_status "up-to-date" false "WireGate is already on the newest GitHub version."
-  rm -rf "${BACKUP_DIR}"
+  write_status "completed" false "Installer update completed successfully."
   rm -f "${PID_FILE}"
 }
 
 finish_error() {
-  write_status "failed" false "Update failed. Check backend/data/update.log for details."
-  rm -rf "${BACKUP_DIR}"
+  write_status "failed" false "Installer update failed. Check backend/data/update.log for details."
   rm -f "${PID_FILE}"
 }
 
-backup_local_state() {
-  rm -rf "${BACKUP_DIR}"
-  mkdir -p "${BACKUP_DIR}"
-
-  if [[ -f "${ENV_FILE}" ]]; then
-    cp "${ENV_FILE}" "${BACKUP_ENV_FILE}"
-  fi
-
-  if [[ -d "${DATA_DIR}" ]]; then
-    mkdir -p "${BACKUP_USERS_DIR}"
-    find "${DATA_DIR}" -mindepth 1 -maxdepth 1 \
-      ! -name 'update.log' \
-      ! -name 'update-status.json' \
-      ! -name 'update.pid' \
-      ! -name 'update-backup' \
-      -exec cp -a {} "${BACKUP_USERS_DIR}/" \;
-  fi
-}
-
-restore_local_state() {
-  if [[ -f "${BACKUP_ENV_FILE}" ]]; then
-    cp "${BACKUP_ENV_FILE}" "${ENV_FILE}"
-  fi
-
-  if [[ -d "${BACKUP_USERS_DIR}" ]]; then
-    mkdir -p "${DATA_DIR}"
-    find "${BACKUP_USERS_DIR}" -mindepth 1 -maxdepth 1 -exec cp -a {} "${DATA_DIR}/" \;
-  fi
-}
-
 trap finish_error ERR
-trap 'restore_local_state; rm -f "${PID_FILE}"' EXIT
+trap 'rm -f "${PID_FILE}"' EXIT
 
-echo "[$(ts)] Starting WireGate update"
+echo "[$(ts)] Starting WireGate installer update"
 echo $$ >"${PID_FILE}"
-write_status "running" true "Checking repository version..."
+write_status "running" true "Running install.sh..."
 
 cd "${REPO_DIR}"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
 CURRENT_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
+REMOTE_COMMIT="$(git rev-parse "origin/${BRANCH}" 2>/dev/null || true)"
 FORCE_INSTALL="${FORCE_INSTALL:-false}"
 
-echo "[$(ts)] Preserving local configuration files"
-backup_local_state
-
-echo "[$(ts)] Fetching origin/${BRANCH}"
-git fetch --all --prune
-
-REMOTE_COMMIT="$(git rev-parse "origin/${BRANCH}" 2>/dev/null || true)"
-
-if [[ "${FORCE_INSTALL,,}" != "true" && -n "${CURRENT_COMMIT}" && -n "${REMOTE_COMMIT}" && "${CURRENT_COMMIT}" == "${REMOTE_COMMIT}" ]]; then
-  UPDATE_AVAILABLE=false
-  echo "[$(ts)] Already on the latest version (${CURRENT_COMMIT})"
-  finish_uptodate
-  exit 0
-fi
-
-UPDATE_AVAILABLE=true
-
 if [[ "${FORCE_INSTALL,,}" == "true" ]]; then
-  echo "[$(ts)] Force install requested. Re-running the installer even if the current version is already installed."
-  write_status "running" true "Force install requested. Re-running the full installer..."
+  echo "[$(ts)] Repair mode requested. Running the installer again."
+  write_status "running" true "Repair mode requested. Running install.sh..."
+else
+  echo "[$(ts)] Update requested. Running the installer to pull and rebuild the latest site."
+  write_status "running" true "Update requested. Running install.sh..."
 fi
 
-echo "[$(ts)] Pulling latest code"
-write_status "running" true "Pulling the newest GitHub version..."
-git pull --ff-only origin "${BRANCH}"
+echo "[$(ts)] Executing install.sh"
+if [[ "${EUID}" -eq 0 ]]; then
+  ./install.sh
+else
+  sudo ./install.sh
+fi
 
 CURRENT_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
+REMOTE_COMMIT="$(git rev-parse "origin/${BRANCH}" 2>/dev/null || true)"
+UPDATE_AVAILABLE=false
 
-echo "[$(ts)] Restoring local configuration files"
-restore_local_state
-
-write_status "running" true "Re-running the full installer on the updated code..."
-echo "[$(ts)] Running install.sh to apply the update like a fresh server install"
-SKIP_REPO_SYNC=true bash ./install.sh
-
-echo "[$(ts)] Restoring local configuration files again after installer run"
-restore_local_state
-
-if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^wiregate.service'; then
-  write_status "running" true "Restarting WireGate service..."
-  echo "[$(ts)] Restarting wiregate.service"
-  systemctl restart wiregate
-fi
-
-echo "[$(ts)] Update completed successfully"
+echo "[$(ts)] Installer update completed successfully"
 finish_success

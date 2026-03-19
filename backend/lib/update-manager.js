@@ -166,14 +166,14 @@ function startDemoUpdate(options = {}) {
   writeStatus({
     status: 'running',
     running: true,
-    message: forceInstall ? 'Starting demo repair install.' : 'Starting demo update.',
+    message: forceInstall ? 'Starting demo repair installer run.' : 'Starting demo installer update.',
     pid: process.pid,
   });
 
   const lines = forceInstall
     ? [
-        'Skipping GitHub version check because repair mode was requested...',
-        'Re-running the installer like a fresh server setup...',
+        'Repair mode requested...',
+        'Running sudo ./install.sh...',
         'Installing backend dependencies...',
         'Installing frontend dependencies...',
         'Building frontend assets...',
@@ -181,14 +181,13 @@ function startDemoUpdate(options = {}) {
         'Repair install completed successfully.',
       ]
     : [
-        'Checking whether a newer GitHub version exists...',
-        'Fetching latest code from origin/main...',
-        'Re-running the installer like a fresh server setup...',
+        'Starting updater...',
+        'Running sudo ./install.sh...',
         'Installing backend dependencies...',
         'Installing frontend dependencies...',
         'Building frontend assets...',
         'Restarting wiregate service...',
-        'Update completed successfully.',
+        'Installer update completed successfully.',
       ];
 
   let index = 0;
@@ -207,7 +206,7 @@ function startDemoUpdate(options = {}) {
 
   return {
     ok: true,
-    message: forceInstall ? 'Demo repair install started.' : 'Demo update started.',
+    message: forceInstall ? 'Demo repair installer run started.' : 'Demo installer update started.',
   };
 }
 
