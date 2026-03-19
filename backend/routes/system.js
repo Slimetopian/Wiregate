@@ -3,6 +3,7 @@ const os = require('os');
 const commandRunner = require('../lib/command-runner');
 const envStore = require('../lib/env-store');
 const updateManager = require('../lib/update-manager');
+const { ensureWireguardBootstrap } = require('../lib/wg-bootstrap');
 
 const router = express.Router();
 
@@ -10,16 +11,37 @@ function isDemoMode() {
   return `${process.env.DEMO_MODE ?? 'true'}`.toLowerCase() !== 'false';
 }
 
+function autoSetupEnabled() {
+  return `${process.env.AUTO_SETUP_WIREGUARD ?? 'true'}`.toLowerCase() !== 'false';
+}
+
 function hasProductionValues() {
+  const env = envStore.readEnvValues();
   const required = [
-    process.env.WG_INTERFACE,
-    process.env.WG_SERVER_ENDPOINT,
-    process.env.WG_SERVER_PORT,
-    process.env.WG_SERVER_PUBLIC_KEY,
-    process.env.WG_SUBNET,
+    env.WG_INTERFACE || process.env.WG_INTERFACE,
+    env.WG_SERVER_ENDPOINT || process.env.WG_SERVER_ENDPOINT,
+    env.WG_SERVER_PORT || process.env.WG_SERVER_PORT,
+    env.WG_SERVER_PUBLIC_KEY || process.env.WG_SERVER_PUBLIC_KEY,
+    env.WG_SUBNET || process.env.WG_SUBNET,
   ];
 
   return required.every((value) => value && !`${value}`.includes('YOUR_'));
+}
+
+function getModeState(extra = {}) {
+  const config = getSystemConfig();
+  const canSwitchToProduction = hasProductionValues();
+  const canAutoConfigure = autoSetupEnabled() && os.platform() === 'linux';
+
+  return {
+    ...envStore.currentMode(),
+    canSwitchToProduction,
+    canAutoConfigure,
+    interface: config.interface,
+    endpoint: config.endpoint,
+    port: config.port,
+    ...extra,
+  };
 }
 
 function getSystemConfig() {
@@ -77,13 +99,7 @@ router.post('/commands/:commandId', (req, res) => {
 
 router.get('/mode', (_req, res) => {
   try {
-    return res.json({
-      ...envStore.currentMode(),
-      canSwitchToProduction: hasProductionValues(),
-      interface: process.env.WG_INTERFACE || 'wg0',
-      endpoint: process.env.WG_SERVER_ENDPOINT || '',
-      port: process.env.WG_SERVER_PORT || '51820',
-    });
+    return res.json(getModeState());
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -92,21 +108,33 @@ router.get('/mode', (_req, res) => {
 router.post('/mode', (req, res) => {
   try {
     const requestedDemo = Boolean(req.body?.demo);
+    let bootstrapResult = null;
 
     if (!requestedDemo && !hasProductionValues()) {
-      return res.status(400).json({
-        error:
-          'Production mode requires real WireGuard values in .env: WG_INTERFACE, WG_SERVER_ENDPOINT, WG_SERVER_PORT, WG_SERVER_PUBLIC_KEY, and WG_SUBNET.',
-      });
+      if (autoSetupEnabled() && os.platform() === 'linux') {
+        bootstrapResult = ensureWireguardBootstrap();
+      }
+
+      if (!hasProductionValues()) {
+        return res.status(400).json({
+          error:
+            'Automatic WireGuard setup could not complete. Real values are still required for WG_INTERFACE, WG_SERVER_ENDPOINT, WG_SERVER_PORT, WG_SERVER_PUBLIC_KEY, and WG_SUBNET.',
+        });
+      }
     }
 
     envStore.updateEnvValues({ DEMO_MODE: requestedDemo ? 'true' : 'false' });
 
-    return res.json({
-      ...envStore.currentMode(),
-      canSwitchToProduction: hasProductionValues(),
-      message: requestedDemo ? 'Switched to test mode.' : 'Switched to production mode.',
-    });
+    return res.json(
+      getModeState({
+        message: requestedDemo
+          ? 'Switched to test mode.'
+          : bootstrapResult
+            ? `Switched to production mode and auto-configured ${bootstrapResult.interface}.`
+            : 'Switched to production mode.',
+        bootstrap: bootstrapResult,
+      })
+    );
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

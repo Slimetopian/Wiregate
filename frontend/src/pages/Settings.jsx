@@ -208,7 +208,9 @@ export default function Settings({ onStatusChange }) {
 
           {!mode?.canSwitchToProduction ? (
             <div className="notice">
-              Production mode is blocked until real `.env` values exist for `WG_INTERFACE`, `WG_SERVER_ENDPOINT`, `WG_SERVER_PORT`, `WG_SERVER_PUBLIC_KEY`, and `WG_SUBNET`.
+              {mode?.canAutoConfigure
+                ? 'Production mode will auto-configure the missing WireGuard values the first time you switch on a Linux server.'
+                : 'Production mode is blocked until real .env values exist for WG_INTERFACE, WG_SERVER_ENDPOINT, WG_SERVER_PORT, WG_SERVER_PUBLIC_KEY, and WG_SUBNET.'}
             </div>
           ) : null}
 
@@ -217,7 +219,7 @@ export default function Settings({ onStatusChange }) {
               className={`btn ${mode?.demo ? 'btn-success' : 'btn-amber'}`}
               type="button"
               onClick={handleModeToggle}
-              disabled={busyMode || (!mode?.demo && false) || (mode?.demo && !mode?.canSwitchToProduction)}
+              disabled={busyMode || (mode?.demo && !mode?.canSwitchToProduction && !mode?.canAutoConfigure)}
             >
               {busyMode ? 'Switching…' : mode?.demo ? 'Switch to production mode' : 'Switch to test mode'}
             </button>
