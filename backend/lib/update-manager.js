@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn, execSync } = require('child_process');
+const { ensureSafeDirectory, getAppMeta } = require('./app-meta');
 
 const repoRoot = path.resolve(__dirname, '../..');
 const dataDir = path.resolve(__dirname, '../data');
@@ -77,6 +78,8 @@ function readStatusFile() {
 }
 
 function getLocalGitSummary() {
+  ensureSafeDirectory();
+
   try {
     const branch = execSync('git rev-parse --abbrev-ref HEAD', {
       cwd: repoRoot,
@@ -138,8 +141,10 @@ function getStatus() {
   const fileStatus = readStatusFile();
   const pid = readPid() || fileStatus.pid || null;
   const running = fileStatus.running && (pid ? isProcessRunning(pid) : false);
+  const appMeta = getAppMeta();
 
   return {
+    ...appMeta,
     ...getLocalGitSummary(),
     ...fileStatus,
     pid,

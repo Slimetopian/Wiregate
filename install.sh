@@ -7,6 +7,11 @@ SERVICE_FILE="/etc/systemd/system/wiregate.service"
 SUDOERS_FILE="/etc/sudoers.d/wiregate"
 CHOSEN_PORT=""
 
+ensure_git_safe_directory() {
+  local repo_dir="$1"
+  git config --global --add safe.directory "${repo_dir}" >/dev/null 2>&1 || true
+}
+
 print_banner() {
   echo "======================================"
   echo "          WireGate Installer          "
@@ -79,6 +84,8 @@ ensure_node() {
 sync_existing_repo() {
   local repo_dir="$1"
   local branch remote_ref current_commit remote_commit
+
+  ensure_git_safe_directory "${repo_dir}"
 
   branch="$(git -C "${repo_dir}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
   if [[ -z "${branch}" || "${branch}" == "HEAD" ]]; then
@@ -324,6 +331,13 @@ install_dependencies() {
   npm --prefix "${WIREGATE_DIR}/frontend" run build
 }
 
+record_installed_version() {
+  if command -v node >/dev/null 2>&1; then
+    echo "Recording installed app version..."
+    node "${WIREGATE_DIR}/backend/scripts/record-version.js" install >/dev/null 2>&1 || true
+  fi
+}
+
 configure_sudoers() {
   local invoking_user="${SUDO_USER:-root}"
   cat >"${SUDOERS_FILE}" <<EOF
@@ -397,4 +411,5 @@ ensure_wireguard_bootstrap
 install_dependencies
 configure_sudoers
 configure_service
+record_installed_version
 print_summary

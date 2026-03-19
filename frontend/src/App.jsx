@@ -11,11 +11,13 @@ import Users from './pages/Users';
 function AppShell() {
   const { showToast } = useToast();
   const [wgStatus, setWgStatus] = useState(null);
+  const [appVersion, setAppVersion] = useState('v1.0.0');
 
   const refreshStatus = useCallback(async () => {
     try {
-      const status = await api.wgStatus();
+      const [status, system] = await Promise.all([api.wgStatus(), api.system()]);
       setWgStatus(status);
+      setAppVersion(system?.app?.displayVersion ? `v${system.app.displayVersion}` : 'v1.0.0');
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -30,7 +32,7 @@ function AppShell() {
   return (
     <BrowserRouter>
       <div className="layout">
-        <Sidebar wgOnline={Boolean(wgStatus?.running)} />
+        <Sidebar wgOnline={Boolean(wgStatus?.running)} appVersion={appVersion} />
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard onStatusChange={setWgStatus} />} />

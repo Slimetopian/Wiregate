@@ -1,5 +1,6 @@
 const express = require('express');
 const os = require('os');
+const { getAppMeta } = require('../lib/app-meta');
 const envStore = require('../lib/env-store');
 const terminalManager = require('../lib/terminal-manager');
 const updateManager = require('../lib/update-manager');
@@ -60,6 +61,7 @@ router.get('/', (_req, res) => {
       memTotal: os.totalmem(),
       memFree: os.freemem(),
       loadAvg: os.loadavg(),
+      app: getAppMeta(),
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });

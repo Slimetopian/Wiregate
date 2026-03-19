@@ -7,7 +7,7 @@ const links = [
   { to: '/settings', label: 'Settings' },
 ];
 
-export default function Sidebar({ wgOnline }) {
+export default function Sidebar({ wgOnline, appVersion }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
@@ -37,7 +37,7 @@ export default function Sidebar({ wgOnline }) {
       </div>
 
       <div className="sidebar-footer">
-        <div>v1.0.0</div>
+        <div>{appVersion || 'v1.0.0'}</div>
         <a href="https://github.com" target="_blank" rel="noreferrer">
           GitHub
         </a>

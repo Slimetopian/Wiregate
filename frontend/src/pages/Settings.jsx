@@ -10,6 +10,7 @@ export default function Settings({ onStatusChange }) {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState(null);
   const [config, setConfig] = useState(null);
+  const [systemInfo, setSystemInfo] = useState(null);
   const [updateState, setUpdateState] = useState(null);
   const [busyAction, setBusyAction] = useState('');
   const [configBusy, setConfigBusy] = useState(false);
@@ -21,14 +22,16 @@ export default function Settings({ onStatusChange }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextStatus, nextConfig, nextUpdateState] = await Promise.all([
+      const [nextStatus, nextConfig, nextUpdateState, nextSystemInfo] = await Promise.all([
         api.wgStatus(),
         api.systemConfig(),
         api.updateStatus(),
+        api.system(),
       ]);
       setStatus(nextStatus);
       setConfig(nextConfig);
       setUpdateState(nextUpdateState);
+      setSystemInfo(nextSystemInfo);
       onStatusChange?.(nextStatus);
     } catch (error) {
       showToast(error.message, 'error');
@@ -77,6 +80,29 @@ export default function Settings({ onStatusChange }) {
     [load, showToast, terminalRef]
   );
 
+  const runWireguardAction = useCallback(
+    async ({ action, successMessage, busyValue }) => {
+      setBusyAction(busyValue);
+      try {
+        terminalRef.current?.focus();
+        await new Promise((resolve, reject) => {
+          api.streamWireguardAction(action, {
+            onEnd: resolve,
+            onError: reject,
+          });
+        });
+
+        showToast(successMessage, 'success');
+        await load();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        setBusyAction('');
+      }
+    },
+    [load, showToast]
+  );
+
   const copyPublicKey = async () => {
     try {
       await navigator.clipboard.writeText(status?.publicKey || '');
@@ -87,21 +113,17 @@ export default function Settings({ onStatusChange }) {
   };
 
   const handleControl = async (action) => {
-    const normalized = action.toLowerCase();
-    return runTerminalAction({
-      commandText:
-        normalized === 'restart'
-          ? `wg-quick down ${status?.interface || 'wg0'}; wg-quick up ${status?.interface || 'wg0'}`
-          : `wg-quick ${normalized} ${status?.interface || 'wg0'}`,
-      successMessage: `Sent WireGuard ${normalized} command to the live server shell.`,
+    return runWireguardAction({
+      action: action.toLowerCase(),
+      successMessage: `WireGuard ${action.toLowerCase()} completed.`,
       busyValue: action,
     });
   };
 
   const handleServiceRestart = async () => {
-    return runTerminalAction({
-      commandText: `systemctl restart wg-quick@${status?.interface || 'wg0'} ; systemctl status wg-quick@${status?.interface || 'wg0'} --no-pager`,
-      successMessage: 'Sent WireGuard service restart to the live server shell.',
+    return runWireguardAction({
+      action: 'service-restart',
+      successMessage: 'WireGuard service restart completed.',
       busyValue: 'service-restart',
     });
   };
@@ -457,6 +479,14 @@ export default function Settings({ onStatusChange }) {
               <strong>{updateState?.branch || '--'}</strong>
             </div>
             <div className="detail-item">
+              <span className="meta-label">Installed version</span>
+              <strong>{updateState?.displayVersion ? `v${updateState.displayVersion}` : '--'}</strong>
+            </div>
+            <div className="detail-item">
+              <span className="meta-label">Update count</span>
+              <strong>{updateState?.updateCount ?? '--'}</strong>
+            </div>
+            <div className="detail-item">
               <span className="meta-label">Current commit</span>
               <strong className="mono-text">{updateState?.currentCommit?.slice(0, 12) || '--'}</strong>
             </div>
@@ -471,6 +501,15 @@ export default function Settings({ onStatusChange }) {
           </div>
 
           <pre className="terminal update-terminal">{updateState?.log || 'No update log yet.'}</pre>
+
+          <div className="about-list">
+            {(updateState?.history || []).slice().reverse().slice(0, 6).map((entry) => (
+              <div key={`${entry.commit}-${entry.installedAt}`} className="detail-item detail-span">
+                <span className="meta-label">{entry.installedAt ? new Date(entry.installedAt).toLocaleString() : 'Installed'}</span>
+                <strong>{entry.version ? `v${entry.version}` : '--'} · {entry.latestChange || 'Unknown change'}</strong>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="card section-card">
@@ -484,7 +523,15 @@ export default function Settings({ onStatusChange }) {
           <div className="about-list">
             <div className="detail-item">
               <span className="meta-label">Version</span>
-              <strong>v1.0.0</strong>
+              <strong>{systemInfo?.app?.displayVersion ? `v${systemInfo.app.displayVersion}` : 'v1.0.0'}</strong>
+            </div>
+            <div className="detail-item">
+              <span className="meta-label">Build number</span>
+              <strong>{systemInfo?.app?.buildNumber ?? '--'}</strong>
+            </div>
+            <div className="detail-item detail-span">
+              <span className="meta-label">Latest change</span>
+              <strong>{systemInfo?.app?.latestChange || '--'}</strong>
             </div>
             <a className="resource-link" href="https://github.com" target="_blank" rel="noreferrer">
               GitHub repository

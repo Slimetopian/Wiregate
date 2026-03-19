@@ -11,6 +11,8 @@ mkdir -p "${DATA_DIR}"
 : >"${LOG_FILE}"
 exec >>"${LOG_FILE}" 2>&1
 
+git config --global --add safe.directory "${REPO_DIR}" >/dev/null 2>&1 || true
+
 ts() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
@@ -87,6 +89,10 @@ UPDATE_AVAILABLE=false
 
 echo "[$(ts)] Installer update completed successfully"
 finish_success
+
+if command -v node >/dev/null 2>&1; then
+  node "${REPO_DIR}/backend/scripts/record-version.js" update >/dev/null 2>&1 || true
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
   echo "[$(ts)] Restarting wiregate.service after successful update"
